@@ -31,7 +31,13 @@ export class RequestsService {
     if (slot && slot.status !== 'available')
       throw new BadRequestException('Date not available');
 
-    const created = await this.reqModel.create({ ...dto, eventDate });
+    const created = await this.reqModel.create({
+      ...dto,
+      userId: new Types.ObjectId(dto.userId),
+      artistId,
+      serviceId: new Types.ObjectId(dto.serviceId),
+      eventDate,
+    });
     return created;
   }
 

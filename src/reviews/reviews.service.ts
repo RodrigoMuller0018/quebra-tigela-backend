@@ -22,7 +22,11 @@ export class ReviewsService {
       throw new BadRequestException(
         'You can only review after a completed service',
       );
-    return this.reviewModel.create(dto);
+    return this.reviewModel.create({
+      ...dto,
+      artistId: new Types.ObjectId(dto.artistId),
+      userId: new Types.ObjectId(dto.userId),
+    });
   }
 
   byArtist(artistId: string) {

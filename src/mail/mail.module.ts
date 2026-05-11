@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { Module } from '@nestjs/common';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter';
 import { PasswordResetMailService } from './password-reset.mail.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 

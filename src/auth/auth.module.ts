@@ -16,7 +16,7 @@ import { Artist, ArtistSchema } from '../artists/schemas/artist.schema';
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: configuration().jwt.secret,
-        signOptions: { expiresIn: configuration().jwt.expiresIn },
+        signOptions: { expiresIn: configuration().jwt.expiresIn as any },
       }),
     }),
   ],

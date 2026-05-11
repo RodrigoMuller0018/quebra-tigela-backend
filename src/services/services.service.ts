@@ -15,7 +15,10 @@ export class ServicesService {
   ) {}
 
   create(dto: CreateServiceOfferingDto) {
-    return this.model.create(dto);
+    return this.model.create({
+      ...dto,
+      artistId: new Types.ObjectId(dto.artistId),
+    });
   }
   byArtist(artistId: string) {
     return this.model.find({
