@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ScheduleService } from './schedule.service';
 import {
@@ -16,11 +17,16 @@ import {
 } from './dto/create-schedule.dto';
 import type { ScheduleStatus } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('schedule')
 export class ScheduleController {
   constructor(private readonly service: ScheduleService) {}
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Post()
   create(@Body() dto: CreateScheduleDto) {
     return this.service.create(dto);
@@ -56,6 +62,8 @@ export class ScheduleController {
     return this.service.listFuture(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateScheduleDto) {
     if (!dto || Object.keys(dto).length === 0) {
@@ -66,6 +74,8 @@ export class ScheduleController {
     return this.service.update(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(id);

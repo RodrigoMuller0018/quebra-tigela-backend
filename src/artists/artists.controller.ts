@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { ArtistsService } from './artists.service';
 import { CreateArtistDto } from './dto/create-artist.dto';
@@ -17,7 +18,9 @@ import { Artist } from './schemas/artist.schema';
 import { ServiceOffering } from '../services/schemas/service.schema';
 import { ScheduleEntry } from '../schedule/schemas/schedule.schema';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import type { Express } from 'express'; // Adicionar import type
+import { JwtAuthGuard } from '../auth/jwt.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('artists')
 export class ArtistsController {
@@ -58,6 +61,8 @@ export class ArtistsController {
     return this.service.findById(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -66,16 +71,26 @@ export class ArtistsController {
     return this.service.update(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Delete(':id')
   remove(@Param('id') id: string): Promise<{ deleted: boolean }> {
     return this.service.remove(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
   @Post(':id/verify-identity')
   @UseInterceptors(FilesInterceptor('photos', 2))
   async verifyIdentity(
     @Param('id') id: string,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles()
+    files: Array<{
+      buffer: Buffer;
+      mimetype: string;
+      originalname: string;
+      size: number;
+    }>,
   ) {
     if (!files || files.length !== 2) {
       throw new BadRequestException(

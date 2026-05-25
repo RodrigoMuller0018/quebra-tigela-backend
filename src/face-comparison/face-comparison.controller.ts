@@ -6,12 +6,21 @@ import {
   BadRequestException,
   Body,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { FaceComparisonService } from './face-comparison.service';
-import type { Express } from 'express'; // Mudança aqui: import type
+import { JwtAuthGuard } from '../auth/jwt.guard';
+
+type UploadedImage = {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
+};
 
 @Controller('face-comparison')
+@UseGuards(JwtAuthGuard)
 export class FaceComparisonController {
   constructor(private readonly faceService: FaceComparisonService) {}
 
@@ -32,7 +41,7 @@ export class FaceComparisonController {
       },
     }),
   )
-  async compareFaces(@UploadedFiles() files: Express.Multer.File[]) {
+  async compareFaces(@UploadedFiles() files: UploadedImage[]) {
     if (!files || files.length !== 2) {
       throw new BadRequestException('É necessário enviar exatamente 2 imagens');
     }
@@ -63,7 +72,7 @@ export class FaceComparisonController {
       },
     }),
   )
-  async verifyIdentity(@UploadedFiles() files: Express.Multer.File[]) {
+  async verifyIdentity(@UploadedFiles() files: UploadedImage[]) {
     if (!files || files.length !== 2) {
       throw new BadRequestException(
         'É necessário enviar foto do usuário e foto do documento',
@@ -100,7 +109,7 @@ export class FaceComparisonController {
     }),
   )
   async verifyArtist(
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles() files: UploadedImage[],
     @Body() body: { artistId: string },
   ) {
     if (!files || files.length !== 2) {
@@ -149,7 +158,7 @@ export class FaceComparisonController {
       },
     }),
   )
-  async analyzeImageQuality(@UploadedFile() file: Express.Multer.File) {
+  async analyzeImageQuality(@UploadedFile() file: UploadedImage) {
     if (!file) {
       throw new BadRequestException(
         'É necessário enviar uma imagem para análise',
