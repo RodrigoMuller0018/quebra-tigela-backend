@@ -26,6 +26,10 @@ export class User {
 
   @Prop({ enum: Object.values(Role), default: Role.CLIENT })
   role: string;
+
+  /** Foto de perfil — data URL base64 (data:image/jpeg;base64,...) ou URL futura de CDN */
+  @Prop()
+  profilePicture?: string;
 }
 export type UserDocument = HydratedDocument<User>;
 export const UserSchema = SchemaFactory.createForClass(User);

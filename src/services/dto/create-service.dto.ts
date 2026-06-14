@@ -1,15 +1,14 @@
 import {
   IsArray,
   IsBoolean,
-  IsMongoId,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateServiceOfferingDto {
-  @IsMongoId() artistId: string;
-  @IsString() title: string;
-  @IsOptional() @IsString() description?: string;
+  @IsString() @MaxLength(200) title!: string;
+  @IsOptional() @IsString() @MaxLength(5000) description?: string;
   @IsOptional() @IsArray() media?: { type: 'image' | 'video'; url: string }[];
   @IsOptional() @IsBoolean() active?: boolean;
 }

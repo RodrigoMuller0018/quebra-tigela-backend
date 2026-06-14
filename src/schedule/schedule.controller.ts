@@ -17,9 +17,12 @@ import {
 } from './dto/create-schedule.dto';
 import type { ScheduleStatus } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { BatchCreateScheduleDto } from './dto/batch-schedule.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { JwtUser } from '../auth/current-user.decorator';
 
 @Controller('schedule')
 export class ScheduleController {
@@ -28,13 +31,38 @@ export class ScheduleController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('artist')
   @Post()
-  create(@Body() dto: CreateScheduleDto) {
+  create(@Body() dto: CreateScheduleDto, @CurrentUser() user: JwtUser) {
+    if (dto.artistId !== user.sub) {
+      throw new BadRequestException(
+        'artistId deve ser o seu próprio (do token)',
+      );
+    }
     return this.service.create(dto);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findById(id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('artist')
+  @Post('batch')
+  batch(@Body() dto: BatchCreateScheduleDto, @CurrentUser() user: JwtUser) {
+    const invalid = dto.schedules.find((s) => s.artistId !== user.sub);
+    if (invalid) {
+      throw new BadRequestException(
+        'Todos os horários devem ser do seu próprio artista',
+      );
+    }
+    return this.service.createMany(dto.schedules);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('client')
+  @Get('my-bookings')
+  myBookings(@CurrentUser() user: JwtUser) {
+    return this.service.listMyBookings(user.sub);
+  }
+
+  @Get('artist/:artistId/future')
+  listFuture(@Param('artistId') id: string) {
+    return this.service.listFuture(id);
   }
 
   @Get('artist/:artistId')
@@ -57,9 +85,26 @@ export class ScheduleController {
     });
   }
 
-  @Get('artist/:artistId/future')
-  listFuture(@Param('artistId') id: string) {
-    return this.service.listFuture(id);
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.service.findById(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('client')
+  @Post(':id/book')
+  book(
+    @Param('id') id: string,
+    @Body() body: { notes?: string; serviceId?: string },
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.book(id, user.sub, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.cancel(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,7 +122,7 @@ export class ScheduleController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('artist')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
+    return this.service.remove(id, user.sub);
   }
 }

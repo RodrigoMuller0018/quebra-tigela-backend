@@ -31,6 +31,10 @@ export class Artist {
 
   @Prop({ type: [String], index: true })
   artTypes: string[];
+
+  /** Foto de perfil — data URL base64 (data:image/jpeg;base64,...) ou URL futura de CDN */
+  @Prop()
+  profilePicture?: string;
 }
 export type ArtistDocument = HydratedDocument<Artist>;
 export const ArtistSchema = SchemaFactory.createForClass(Artist);
