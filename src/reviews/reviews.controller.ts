@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -9,71 +10,77 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
-import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
-import { ReplyReviewDto } from './dto/reply-review.dto';
+import { CriarAvaliacaoDto } from './dto/create-review.dto';
+import { AtualizarAvaliacaoDto } from './dto/update-review.dto';
+import { ResponderAvaliacaoDto } from './dto/reply-review.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { PapeisGuard } from '../auth/roles.guard';
+import { Papeis } from '../auth/roles.decorator';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
 
-@Controller('reviews')
+@Controller('avaliacoes')
 export class ReviewsController {
   constructor(private readonly service: ReviewsService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
   @Post()
-  create(@Body() dto: CreateReviewDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.sub);
+  criar(@Body() dto: CriarAvaliacaoDto, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.criar(dto, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
-  @Get('mine')
-  mine(@CurrentUser() user: JwtUser) {
-    return this.service.byUser(user.sub);
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
+  @Get('minhas')
+  minhas(@UsuarioAtual() user: UsuarioJwt) {
+    return this.service.porUsuario(user.sub);
   }
 
-  @Get('artist/:artistId')
-  byArtist(@Param('artistId') id: string) {
-    return this.service.byArtist(id);
+  @Get('artista/:artistaId')
+  porArtista(@Param('artistaId') id: string) {
+    return this.service.porArtista(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
   @Patch(':id')
-  update(
+  atualizar(
     @Param('id') id: string,
-    @Body() dto: UpdateReviewDto,
-    @CurrentUser() user: JwtUser,
+    @Body() dto: AtualizarAvaliacaoDto,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    return this.service.update(id, dto, user.sub);
+    return this.service.atualizar(id, dto, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.sub);
+  remover(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.remover(id, user.sub);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Post(':id/reply')
-  reply(
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
+  @Post(':id/resposta')
+  responder(
     @Param('id') id: string,
-    @Body() dto: ReplyReviewDto,
-    @CurrentUser() user: JwtUser,
+    @Body() dto: ResponderAvaliacaoDto,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    return this.service.reply(id, dto.text, user.sub);
+    if (!user.artistaId) {
+      throw new ForbiddenException('Você precisa ter perfil de artista');
+    }
+    return this.service.responder(id, dto.texto, user.artistaId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Delete(':id/reply')
-  deleteReply(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.deleteReply(id, user.sub);
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
+  @Delete(':id/resposta')
+  removerResposta(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    if (!user.artistaId) {
+      throw new ForbiddenException('Você precisa ter perfil de artista');
+    }
+    return this.service.removerResposta(id, user.artistaId);
   }
 }

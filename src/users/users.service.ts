@@ -6,23 +6,27 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User, UserDocument } from './schemas/user.schema';
-import { CreateUserDto } from './dto/create-user.dto';
+import { Model, Types } from 'mongoose';
+import { Usuario, UsuarioDocument } from './schemas/user.schema';
+import { Artista, ArtistaDocument } from '../artists/schemas/artist.schema';
+import { CriarUsuarioDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private model: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(Usuario.name) private model: Model<UsuarioDocument>,
+    @InjectModel(Artista.name) private artistaModel: Model<ArtistaDocument>,
+  ) {}
 
-  async create(dto: CreateUserDto) {
+  async criar(dto: CriarUsuarioDto) {
     try {
-      const { password, ...rest } = dto;
-      const passwordHash = await bcrypt.hash(password, 10);
-      const user = new this.model({ ...rest, passwordHash, role: 'client' });
-      await user.save();
-      const obj = user.toObject();
-      delete (obj as { passwordHash?: string }).passwordHash;
+      const { senha, ...resto } = dto;
+      const senhaHash = await bcrypt.hash(senha, 10);
+      const usuario = new this.model({ ...resto, senhaHash, papel: 'cliente' });
+      await usuario.save();
+      const obj = usuario.toObject();
+      delete (obj as { senhaHash?: string }).senhaHash;
       return obj;
     } catch (error: any) {
       if (error.code === 11000) {
@@ -39,35 +43,76 @@ export class UsersService {
     }
   }
 
-  async findAll(): Promise<User[]> {
-    return this.model.find().select('-passwordHash').lean();
+  /** Listagem só de contas ativas (sem desativadas). */
+  async listar(): Promise<Usuario[]> {
+    return this.model.find({ desativadaEm: { $exists: false } }).select('-senhaHash').lean();
   }
 
-  async findById(id: string): Promise<User | null> {
-    const user = await this.model.findById(id).select('-passwordHash').lean();
-    if (!user) throw new NotFoundException('Usuário não encontrado');
-    return user;
+  async buscarPorId(id: string): Promise<Usuario | null> {
+    const usuario = await this.model.findById(id).select('-senhaHash').lean();
+    if (!usuario) throw new NotFoundException('Usuário não encontrado');
+    return usuario;
   }
 
-  async update(id: string, dto: Partial<CreateUserDto>): Promise<User> {
-    if (dto.password) {
-      const passwordHash = await bcrypt.hash(dto.password, 10);
-      const { password, ...rest } = dto;
-      Object.assign(rest, { passwordHash });
-      dto = rest;
+  async atualizar(id: string, dto: Partial<CriarUsuarioDto>): Promise<Usuario> {
+    if (dto.senha) {
+      const senhaHash = await bcrypt.hash(dto.senha, 10);
+      const { senha, ...resto } = dto;
+      Object.assign(resto, { senhaHash });
+      dto = resto;
     }
-    const updated = await this.model
+    const atualizado = await this.model
       .findByIdAndUpdate(id, dto, { new: true })
-      .select('-passwordHash')
+      .select('-senhaHash')
       .lean();
-    if (!updated) throw new NotFoundException('Usuário não encontrado');
-    return updated as User;
+    if (!atualizado) throw new NotFoundException('Usuário não encontrado');
+    return atualizado as Usuario;
   }
 
-  async remove(id: string): Promise<{ deleted: boolean }> {
-    const result = await this.model.deleteOne({ _id: id });
-    if (result.deletedCount === 0)
+  /**
+   * Soft delete em cascata: marca o Usuario como desativado e propaga pro Artista
+   * linkado (se houver). Dados de Servicos/Agenda/Solicitacoes/Avaliacoes ficam
+   * intactos — mas como o Artista vira ativo=false e o Usuario tem desativadaEm,
+   * eles somem das buscas públicas.
+   *
+   * Reversível por login bem-sucedido (ver AuthService.login).
+   */
+  async desativarConta(id: string): Promise<{ desativadaEm: Date }> {
+    const objId = new Types.ObjectId(id);
+    const agora = new Date();
+    const atualizado = await this.model.findByIdAndUpdate(
+      objId,
+      { desativadaEm: agora },
+      { new: true },
+    );
+    if (!atualizado) throw new NotFoundException('Usuário não encontrado');
+
+    await this.artistaModel.updateMany(
+      { usuarioId: objId },
+      { ativo: false, desativadoEm: agora },
+    );
+
+    return { desativadaEm: agora };
+  }
+
+  /**
+   * Reativa conta (e o Artista linkado, se houver).
+   * Chamado pelo AuthService.login quando detecta conta desativada com login válido.
+   */
+  async reativarConta(id: string): Promise<void> {
+    const objId = new Types.ObjectId(id);
+    await this.model.updateOne({ _id: objId }, { $unset: { desativadaEm: '' } });
+    await this.artistaModel.updateMany(
+      { usuarioId: objId },
+      { ativo: true, $unset: { desativadoEm: '' } },
+    );
+  }
+
+  /** Hard delete real (admin/dev). Frontend não expõe — usa desativarConta. */
+  async remover(id: string): Promise<{ removido: boolean }> {
+    const resultado = await this.model.deleteOne({ _id: id });
+    if (resultado.deletedCount === 0)
       throw new NotFoundException('Usuário não encontrado');
-    return { deleted: true };
+    return { removido: true };
   }
 }

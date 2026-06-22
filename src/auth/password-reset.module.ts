@@ -4,8 +4,7 @@ import {
   PasswordReset,
   PasswordResetSchema,
 } from './schemas/password-reset.schema';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Artist, ArtistSchema } from '../artists/schemas/artist.schema';
+import { Usuario, UsuarioSchema } from '../users/schemas/user.schema';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordResetController } from './password-reset.controller';
 import { MailModule } from '../mail/mail.module';
@@ -14,8 +13,7 @@ import { MailModule } from '../mail/mail.module';
   imports: [
     MongooseModule.forFeature([
       { name: PasswordReset.name, schema: PasswordResetSchema },
-      { name: User.name, schema: UserSchema },
-      { name: Artist.name, schema: ArtistSchema },
+      { name: Usuario.name, schema: UsuarioSchema },
     ]),
     MailModule,
   ],

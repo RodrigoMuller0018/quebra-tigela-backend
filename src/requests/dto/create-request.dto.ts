@@ -3,34 +3,31 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
 } from 'class-validator';
 
-const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-export class CreateRequestDto {
-  @IsMongoId() artistId!: string;
-  @IsMongoId() serviceId!: string;
+export class CriarSolicitacaoDto {
+  @IsMongoId() artistaId!: string;
+  @IsMongoId() servicoId!: string;
 
   @IsOptional()
   @IsMongoId()
-  scheduleId?: string;
+  agendaId?: string;
 
-  @IsDateString() eventDate!: string;
+  /** ISO 8601 com timezone (ex: 2026-06-21T22:00:00-03:00) */
+  @IsDateString()
+  inicio!: string;
 
-  @Matches(TIME_REGEX, { message: 'startTime deve estar no formato HH:mm (24h)' })
-  startTime!: string;
-
-  @Matches(TIME_REGEX, { message: 'endTime deve estar no formato HH:mm (24h)' })
-  endTime!: string;
+  /** ISO 8601 com timezone. Deve ser > inicio. */
+  @IsDateString()
+  fim!: string;
 
   @IsString()
   @MaxLength(300)
-  location!: string;
+  local!: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(2000)
-  details?: string;
+  detalhes?: string;
 }

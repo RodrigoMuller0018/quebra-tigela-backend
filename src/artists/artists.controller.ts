@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -14,115 +15,164 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ArtistsService } from './artists.service';
-import { CreateArtistDto } from './dto/create-artist.dto';
-import { Artist } from './schemas/artist.schema';
-import { ServiceOffering } from '../services/schemas/service.schema';
-import { ScheduleEntry } from '../schedule/schemas/schedule.schema';
+import { TornarSeArtistaDto } from './dto/become-artist.dto';
+import { AtualizarArtistaDto } from './dto/update-artist.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt.guard';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { Artista, ArtistaDocument } from './schemas/artist.schema';
 
-function ensureOwner(paramId: string, user: JwtUser) {
-  if (paramId !== user.sub && user.role !== 'admin') {
-    throw new ForbiddenException(
-      'Você só pode acessar/modificar seu próprio perfil de artista',
-    );
-  }
-}
-
-@Controller('artists')
+@Controller('artistas')
 export class ArtistsController {
-  constructor(private readonly service: ArtistsService) {}
+  constructor(
+    private readonly service: ArtistsService,
+    @InjectModel(Artista.name) private artistaModel: Model<ArtistaDocument>,
+  ) {}
 
-  @Post()
-  create(@Body() dto: CreateArtistDto): Promise<Artist> {
-    return this.service.create(dto);
+  /** Garante que o JWT.sub é o dono do Artista :id (ou é admin). */
+  private async garantirDonoArtista(artistaId: string, user: UsuarioJwt) {
+    if (user.papel === 'admin') return;
+    const doc = await this.artistaModel
+      .findById(new Types.ObjectId(artistaId))
+      .select('usuarioId')
+      .lean();
+    if (!doc) throw new NotFoundException('Artista não encontrado');
+    if (doc.usuarioId.toString() !== user.sub) {
+      throw new ForbiddenException(
+        'Você só pode modificar seu próprio perfil de artista',
+      );
+    }
   }
 
-  @Get('search')
-  search(
-    @Query('city') city?: string,
-    @Query('artType') artType?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ): Promise<Artist[]> {
-    return this.service.search({ city, artType, page: +page, limit: +limit });
+  /** Perfil público localizado por handle (estilo @username). */
+  @Get('por-handle/:handle/perfil')
+  perfilPorHandle(@Param('handle') handle: string) {
+    return this.service.perfilPorHandle(handle);
   }
 
-  @Get(':id/profile')
-  profile(@Param('id') id: string): Promise<{
-    artist: Omit<Artist, 'passwordHash'>;
-    services: ServiceOffering[];
-    schedule: ScheduleEntry[];
-    rating: { avg: number | null; count: number };
-  }> {
-    return this.service.profile(id);
+  /** Consulta de disponibilidade pra UI mostrar verde/vermelho em tempo real. */
+  @Get('por-handle/:handle/disponivel')
+  handleDisponivel(@Param('handle') handle: string) {
+    return this.service.handleDisponivel(handle);
+  }
+
+  /**
+   * Registra uma visualização do perfil. Endpoint público — funciona sem
+   * login (visitantes anônimos contam) e ignora self-views quando o JWT
+   * é o do próprio dono.
+   */
+  @UseGuards(OptionalJwtAuthGuard)
+  @Post('por-handle/:handle/visualizar')
+  registrarVisualizacao(
+    @Param('handle') handle: string,
+    @UsuarioAtual() user: UsuarioJwt | null,
+  ) {
+    return this.service.registrarVisualizacaoPorHandle(handle, user?.sub);
+  }
+
+  @Get('buscar')
+  buscar(
+    @Query('cidade') cidade?: string,
+    @Query('tipoArte') tipoArte?: string,
+    @Query('pagina') pagina = 1,
+    @Query('limite') limite = 20,
+  ) {
+    return this.service.buscar({ cidade, tipoArte, pagina: +pagina, limite: +limite });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('eu')
+  async meuPerfil(@UsuarioAtual() user: UsuarioJwt) {
+    const artista = await this.service.buscarPorUsuarioId(user.sub);
+    if (!artista) {
+      throw new NotFoundException('Você ainda não tem perfil de artista');
+    }
+    return artista;
+  }
+
+  /** Usuário logado cria seu perfil de artista (composition: Usuario + Artista). */
+  @UseGuards(JwtAuthGuard)
+  @Post('tornar-se-artista')
+  tornarSeArtista(@Body() dto: TornarSeArtistaDto, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.tornarSeArtista(user.sub, dto);
+  }
+
+  @Get(':id/perfil')
+  perfil(@Param('id') id: string) {
+    return this.service.perfil(id);
   }
 
   @Get()
-  getAll(): Promise<Artist[]> {
-    return this.service.findAll();
+  listar() {
+    return this.service.listarTodos();
   }
 
   @Get(':id')
-  getById(@Param('id') id: string): Promise<Artist | null> {
-    return this.service.findById(id);
+  buscarPorId(@Param('id') id: string) {
+    return this.service.buscarPorId(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  update(
+  async atualizar(
     @Param('id') id: string,
-    @Body() dto: Partial<CreateArtistDto>,
-    @CurrentUser() user: JwtUser,
-  ): Promise<Artist> {
-    ensureOwner(id, user);
-    return this.service.update(id, dto);
+    @Body() dto: AtualizarArtistaDto,
+    @UsuarioAtual() user: UsuarioJwt,
+  ) {
+    await this.garantirDonoArtista(id, user);
+    return this.service.atualizar(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/desativar')
+  async desativar(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    await this.garantirDonoArtista(id, user);
+    return this.service.desativar(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/reativar')
+  async reativar(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    await this.garantirDonoArtista(id, user);
+    return this.service.reativar(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtUser,
-  ): Promise<{ deleted: boolean }> {
-    ensureOwner(id, user);
-    return this.service.remove(id);
+  async remover(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    await this.garantirDonoArtista(id, user);
+    return this.service.remover(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Post(':id/verify-identity')
-  @UseInterceptors(FilesInterceptor('photos', 2))
-  async verifyIdentity(
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/verificar-identidade')
+  @UseInterceptors(FilesInterceptor('fotos', 2))
+  async verificarIdentidade(
     @Param('id') id: string,
     @UploadedFiles()
-    files: Array<{
+    arquivos: Array<{
       buffer: Buffer;
       mimetype: string;
       originalname: string;
       size: number;
     }>,
-    @CurrentUser() user: JwtUser,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    ensureOwner(id, user);
-    if (!files || files.length !== 2) {
+    await this.garantirDonoArtista(id, user);
+    if (!arquivos || arquivos.length !== 2) {
       throw new BadRequestException(
         'É necessário enviar foto atual e foto do documento',
       );
     }
-
-    const [currentPhoto, documentPhoto] = files;
-
-    return this.service.verifyArtistIdentity(
+    const [fotoAtual, fotoDocumento] = arquivos;
+    return this.service.verificarIdentidade(
       id,
-      currentPhoto.buffer,
-      documentPhoto.buffer,
+      fotoAtual.buffer,
+      fotoDocumento.buffer,
     );
   }
 }

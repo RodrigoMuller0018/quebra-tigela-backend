@@ -1,72 +1,67 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
+export const STATUS_SOLICITACAO = [
+  'pendente',
+  'aceita',
+  'aguardando_confirmacao',
+  'concluida',
+  'recusada',
+  'cancelada',
+] as const;
+export type StatusSolicitacao = (typeof STATUS_SOLICITACAO)[number];
+
 @Schema({
-  collection: 'requests',
-  timestamps: { createdAt: 'requestedAt', updatedAt: 'updatedAt' },
+  collection: 'solicitacoes',
+  timestamps: { createdAt: 'solicitadaEm', updatedAt: 'atualizadaEm' },
 })
-export class Request {
+export class Solicitacao {
   _id!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Usuario', required: true, index: true })
+  usuarioId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Artist', required: true, index: true })
-  artistId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Artista', required: true, index: true })
+  artistaId!: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
-    ref: 'ServiceOffering',
+    ref: 'Servico',
     required: true,
     index: true,
   })
-  serviceId!: Types.ObjectId;
+  servicoId!: Types.ObjectId;
 
-  // Slot ancorado (Caminho A: reserva direta). Null para solicitação livre (Caminho B).
-  @Prop({ type: Types.ObjectId, ref: 'ScheduleEntry', index: true })
-  scheduleId?: Types.ObjectId;
+  /** Slot ancorado (Caminho A: reserva direta). Null para solicitação livre (Caminho B). */
+  @Prop({ type: Types.ObjectId, ref: 'ItemAgenda', index: true })
+  agendaId?: Types.ObjectId;
 
+  /** Instante de início (UTC). Suporta eventos multi-dia (ex: show 22h → 02h). */
   @Prop({ type: Date, required: true, index: true })
-  eventDate!: Date;
+  inicio!: Date;
 
-  @Prop({ required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ })
-  startTime!: string;
-
-  @Prop({ required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ })
-  endTime!: string;
+  /** Instante de fim (UTC). Deve ser estritamente > inicio. */
+  @Prop({ type: Date, required: true, index: true })
+  fim!: Date;
 
   @Prop()
-  location!: string;
+  local!: string;
 
   @Prop({
-    enum: [
-      'pending',
-      'accepted',
-      'awaiting_confirmation',
-      'completed',
-      'rejected',
-      'cancelled',
-    ],
-    default: 'pending',
+    enum: STATUS_SOLICITACAO,
+    default: 'pendente',
     index: true,
   })
-  status!:
-    | 'pending'
-    | 'accepted'
-    | 'awaiting_confirmation'
-    | 'completed'
-    | 'rejected'
-    | 'cancelled';
+  status!: StatusSolicitacao;
 
-  /** Quando artista marcou como "realizado". Usado pra auto-confirmar após 7 dias. */
+  /** Quando artista marcou como "realizada". Usado pra auto-confirmar após 7 dias. */
   @Prop({ type: Date })
-  markedDoneAt?: Date;
+  marcadaConcluidaEm?: Date;
 
   @Prop()
-  details?: string;
+  detalhes?: string;
 }
 
-export type RequestDocument = HydratedDocument<Request>;
-export const RequestSchema = SchemaFactory.createForClass(Request);
-// Índice composto pra queries por (artista, data) — não-unique porque múltiplas solicitações por dia OK
-RequestSchema.index({ artistId: 1, eventDate: 1, startTime: 1 });
+export type SolicitacaoDocument = HydratedDocument<Solicitacao>;
+export const SolicitacaoSchema = SchemaFactory.createForClass(Solicitacao);
+SolicitacaoSchema.index({ artistaId: 1, inicio: 1 });

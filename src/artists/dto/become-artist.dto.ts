@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsDateString,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
@@ -10,16 +11,26 @@ import {
 import { REGEX_TELEFONE_BR } from '../../common/telefone';
 import { REGEX_HANDLE } from '../../common/handle';
 
-export class AtualizarArtistaDto {
+/**
+ * Pra um Usuario existente virar artista. Pega usuarioId do JWT, não do body.
+ * Não recebe nome/email/senha — já estão no Usuario base.
+ */
+export class TornarSeArtistaDto {
   @IsOptional()
   @IsString({ message: "O campo 'bio' deve ser um texto" })
   @MaxLength(2000)
   bio?: string;
 
-  @IsOptional()
   @IsArray({ message: "O campo 'tiposArte' deve ser uma lista de textos" })
-  tiposArte?: string[];
+  @IsNotEmpty({
+    message: "O campo 'tiposArte' é obrigatório e não pode estar vazio",
+  })
+  tiposArte!: string[];
 
+  /**
+   * Handle público (estilo @username). Opcional — se não vier, backend auto-gera
+   * a partir do nome do usuário com sufixo numérico em caso de colisão.
+   */
   @IsOptional()
   @IsString({ message: "O campo 'handle' deve ser um texto" })
   @Matches(REGEX_HANDLE, {
@@ -28,13 +39,16 @@ export class AtualizarArtistaDto {
   })
   handle?: string;
 
-  @IsOptional()
+  /**
+   * Telefone celular brasileiro normalizado (55 + DDD + 9 + 8 dígitos).
+   * Frontend deve normalizar antes de enviar.
+   */
   @IsString({ message: "O campo 'telefone' deve ser um texto" })
   @Matches(REGEX_TELEFONE_BR, {
     message:
       "O campo 'telefone' deve ser um celular brasileiro válido (com DDI 55, DDD e 9 inicial)",
   })
-  telefone?: string;
+  telefone!: string;
 
   @IsOptional()
   @IsString({ message: "O campo 'nome artístico' deve ser um texto" })

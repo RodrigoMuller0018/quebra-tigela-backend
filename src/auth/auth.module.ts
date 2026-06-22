@@ -6,14 +6,14 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Artist, ArtistSchema } from '../artists/schemas/artist.schema';
+import { Usuario, UsuarioSchema } from '../users/schemas/user.schema';
+import { Artista, ArtistaSchema } from '../artists/schemas/artist.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
-      { name: Artist.name, schema: ArtistSchema },
+      { name: Usuario.name, schema: UsuarioSchema },
+      { name: Artista.name, schema: ArtistaSchema },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

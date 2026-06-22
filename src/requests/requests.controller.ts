@@ -9,59 +9,62 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { RequestsService } from './requests.service';
-import { CreateRequestDto } from './dto/create-request.dto';
-import { UpdateRequestStatusDto } from './dto/update-request.dto';
+import { CriarSolicitacaoDto } from './dto/create-request.dto';
+import { AtualizarStatusSolicitacaoDto } from './dto/update-request.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { PapeisGuard } from '../auth/roles.guard';
+import { Papeis } from '../auth/roles.decorator';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
 
-@Controller('requests')
+@Controller('solicitacoes')
 export class RequestsController {
   constructor(private readonly service: RequestsService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
   @Post()
-  create(@Body() dto: CreateRequestDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.sub);
+  criar(@Body() dto: CriarSolicitacaoDto, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.criar(dto, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/status')
-  changeStatus(
+  mudarStatus(
     @Param('id') id: string,
-    @Body() dto: UpdateRequestStatusDto,
-    @CurrentUser() user: JwtUser,
+    @Body() dto: AtualizarStatusSolicitacaoDto,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    return this.service.changeStatus(id, dto.status, user);
+    return this.service.mudarStatus(id, dto.status, user);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
-  @Get('user/:userId')
-  byUser(@Param('userId') userId: string, @CurrentUser() user: JwtUser) {
-    if (userId !== user.sub && user.role !== 'admin') {
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
+  @Get('usuario/:usuarioId')
+  porUsuario(
+    @Param('usuarioId') usuarioId: string,
+    @UsuarioAtual() user: UsuarioJwt,
+  ) {
+    if (usuarioId !== user.sub && user.papel !== 'admin') {
       throw new ForbiddenException(
         'Você só pode listar suas próprias solicitações',
       );
     }
-    return this.service.byUser(userId);
+    return this.service.porUsuario(usuarioId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Get('artist/:artistId')
-  byArtist(
-    @Param('artistId') artistId: string,
-    @CurrentUser() user: JwtUser,
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
+  @Get('artista/:artistaId')
+  porArtista(
+    @Param('artistaId') artistaId: string,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    if (artistId !== user.sub && user.role !== 'admin') {
+    if (artistaId !== user.artistaId && user.papel !== 'admin') {
       throw new ForbiddenException(
         'Você só pode listar solicitações do seu próprio perfil',
       );
     }
-    return this.service.byArtist(artistId);
+    return this.service.porArtista(artistaId);
   }
 }

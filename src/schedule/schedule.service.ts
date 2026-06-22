@@ -7,357 +7,331 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
-import { ScheduleEntry, ScheduleDocument } from './schemas/schedule.schema';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
-import type { ScheduleStatus } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { ItemAgenda, ItemAgendaDocument } from './schemas/schedule.schema';
+import { CriarItemAgendaDto } from './dto/create-schedule.dto';
+import type { StatusAgenda } from './dto/create-schedule.dto';
+import { AtualizarItemAgendaDto } from './dto/update-schedule.dto';
 
-interface ArtistScheduleFilter {
-  artistId: string;
-  from?: string;
-  to?: string;
-  status?: ScheduleStatus;
-  limit?: number;
+interface FiltroAgendaArtista {
+  artistaId: string;
+  de?: string;
+  ate?: string;
+  status?: StatusAgenda;
+  limite?: number;
 }
 
 @Injectable()
 export class ScheduleService {
   constructor(
-    @InjectModel(ScheduleEntry.name) private model: Model<ScheduleDocument>,
+    @InjectModel(ItemAgenda.name) private model: Model<ItemAgendaDocument>,
   ) {}
 
-  async create(dto: CreateScheduleDto) {
-    const artistId = this.ensureObjectId(dto.artistId, 'artistId');
-    const date = this.ensureDateOnly(dto.date, 'date');
+  async criar(dto: CriarItemAgendaDto) {
+    const artistaId = this.garantirObjectId(dto.artistaId, 'artistaId');
+    const { inicio, fim } = this.parseEValidarInstantes(dto.inicio, dto.fim);
+    this.validarNaoRetroativo(inicio);
+    await this.garantirSemSobreposicao(artistaId, inicio, fim);
 
-    this.validateTimeRange(dto.startTime, dto.endTime);
-    this.validateNotRetroactive(date, dto.startTime);
-    await this.ensureNoOverlap(artistId, date, dto.startTime, dto.endTime);
-
-    const created = await this.model.create({
-      artistId,
-      date,
-      startTime: dto.startTime,
-      endTime: dto.endTime,
-      status: dto.status ?? 'available',
-      notes: dto.notes,
-      serviceId: dto.serviceId
-        ? this.ensureObjectId(dto.serviceId, 'serviceId')
+    const criado = await this.model.create({
+      artistaId,
+      inicio,
+      fim,
+      status: dto.status ?? 'disponivel',
+      observacoes: dto.observacoes,
+      servicoId: dto.servicoId
+        ? this.garantirObjectId(dto.servicoId, 'servicoId')
         : undefined,
-      clientId: dto.clientId
-        ? this.ensureObjectId(dto.clientId, 'clientId')
+      clienteId: dto.clienteId
+        ? this.garantirObjectId(dto.clienteId, 'clienteId')
         : undefined,
     });
 
-    return created.toObject();
+    return criado.toObject();
   }
 
-  async createMany(schedules: CreateScheduleDto[]) {
-    // 1. Valida cada item isoladamente (formato HH:mm, start<end, não retroativo)
-    for (const dto of schedules) {
-      this.validateTimeRange(dto.startTime, dto.endTime);
-      this.validateNotRetroactive(
-        this.ensureDateOnly(dto.date, 'date'),
-        dto.startTime,
-      );
-    }
+  async criarEmLote(itens: CriarItemAgendaDto[]) {
+    const normalizados = itens.map((dto) => {
+      const { inicio, fim } = this.parseEValidarInstantes(dto.inicio, dto.fim);
+      this.validarNaoRetroativo(inicio);
+      return { dto, inicio, fim };
+    });
 
-    // 2. Valida overlap intra-batch (slots novos entre si)
-    for (let i = 0; i < schedules.length; i++) {
-      for (let j = i + 1; j < schedules.length; j++) {
-        const a = schedules[i];
-        const b = schedules[j];
+    for (let i = 0; i < normalizados.length; i++) {
+      for (let j = i + 1; j < normalizados.length; j++) {
+        const a = normalizados[i];
+        const b = normalizados[j];
         if (
-          a.artistId === b.artistId &&
-          a.date === b.date &&
-          a.startTime < b.endTime &&
-          a.endTime > b.startTime
+          a.dto.artistaId === b.dto.artistaId &&
+          a.inicio < b.fim &&
+          a.fim > b.inicio
         ) {
           throw new ConflictException(
-            `Os horários ${a.startTime}–${a.endTime} e ${b.startTime}–${b.endTime} do lote se sobrepõem`,
+            `Os horários do lote se sobrepõem: ${a.inicio.toISOString()}→${a.fim.toISOString()} e ${b.inicio.toISOString()}→${b.fim.toISOString()}`,
           );
         }
       }
     }
 
-    // 3. Valida overlap com slots já existentes no banco
-    for (const dto of schedules) {
-      const artistId = this.ensureObjectId(dto.artistId, 'artistId');
-      const date = this.ensureDateOnly(dto.date, 'date');
-      await this.ensureNoOverlap(artistId, date, dto.startTime, dto.endTime);
+    for (const { dto, inicio, fim } of normalizados) {
+      const artistaId = this.garantirObjectId(dto.artistaId, 'artistaId');
+      await this.garantirSemSobreposicao(artistaId, inicio, fim);
     }
 
-    // 4. Todas as validações passaram — agora cria todos
-    const created: ScheduleEntry[] = [];
-    for (const dto of schedules) {
-      created.push(await this.create(dto));
+    const criados: ItemAgenda[] = [];
+    for (const dto of itens) {
+      criados.push(await this.criar(dto));
     }
-    return created;
+    return criados;
   }
 
-  async findById(id: string) {
-    const objectId = this.ensureObjectId(id, 'id');
-    const entry = await this.model.findById(objectId).lean();
-    if (!entry) {
+  async buscarPorId(id: string) {
+    const objectId = this.garantirObjectId(id, 'id');
+    const item = await this.model.findById(objectId).lean();
+    if (!item) {
       throw new NotFoundException('Agenda não encontrada');
     }
-    return entry;
+    return item;
   }
 
-  async listByArtist(filter: ArtistScheduleFilter) {
-    const artistId = this.ensureObjectId(filter.artistId, 'artistId');
-    const query: FilterQuery<ScheduleDocument> = { artistId };
+  async listarPorArtista(filtro: FiltroAgendaArtista) {
+    const artistaId = this.garantirObjectId(filtro.artistaId, 'artistaId');
+    const query: FilterQuery<ItemAgendaDocument> = { artistaId };
 
-    if (filter.from || filter.to) {
-      query.date = {} as FilterQuery<ScheduleDocument>['date'];
-      if (filter.from) {
-        (query.date as any).$gte = this.ensureDateOnly(filter.from, 'from');
+    if (filtro.de || filtro.ate) {
+      query.inicio = {} as FilterQuery<ItemAgendaDocument>['inicio'];
+      if (filtro.de) {
+        const de = new Date(filtro.de);
+        if (Number.isNaN(de.getTime())) {
+          throw new BadRequestException('Campo de inválido');
+        }
+        (query.inicio as any).$gte = de;
       }
-      if (filter.to) {
-        (query.date as any).$lte = this.ensureDateOnly(filter.to, 'to');
+      if (filtro.ate) {
+        const ate = new Date(filtro.ate);
+        if (Number.isNaN(ate.getTime())) {
+          throw new BadRequestException('Campo ate inválido');
+        }
+        (query.inicio as any).$lte = ate;
       }
     }
 
-    if (filter.status) {
-      // Cliente pediu um status específico — respeita
-      query.status = filter.status;
+    if (filtro.status) {
+      query.status = filtro.status;
     } else {
-      // Default: esconde cancelled E completed (histórico fica nas Requests)
-      query.status = { $nin: ['cancelled', 'completed'] };
+      query.status = { $nin: ['cancelada', 'concluida'] };
     }
 
-    const limit = Math.max(1, Math.min(filter.limit ?? 200, 500));
+    const limite = Math.max(1, Math.min(filtro.limite ?? 200, 500));
 
     return this.model
       .find(query)
-      .sort({ date: 1, startTime: 1 })
-      .limit(limit)
+      .sort({ inicio: 1 })
+      .limit(limite)
       .lean();
   }
 
-  async update(id: string, dto: UpdateScheduleDto) {
-    const objectId = this.ensureObjectId(id, 'id');
-    const entry = await this.model.findById(objectId);
-    if (!entry) {
+  async atualizar(id: string, dto: AtualizarItemAgendaDto) {
+    const objectId = this.garantirObjectId(id, 'id');
+    const item = await this.model.findById(objectId);
+    if (!item) {
       throw new NotFoundException('Agenda não encontrada');
     }
 
-    const nextArtistId = dto.artistId
-      ? this.ensureObjectId(dto.artistId, 'artistId')
-      : entry.artistId;
-    const nextDate = dto.date
-      ? this.ensureDateOnly(dto.date, 'date')
-      : entry.date;
-    const nextStartTime = dto.startTime ?? entry.startTime;
-    const nextEndTime = dto.endTime ?? entry.endTime;
-    const nextStatus = dto.status ?? entry.status;
+    const proximoArtistaId = dto.artistaId
+      ? this.garantirObjectId(dto.artistaId, 'artistaId')
+      : item.artistaId;
+    const proximoInicio = dto.inicio ? new Date(dto.inicio) : item.inicio;
+    const proximoFim = dto.fim ? new Date(dto.fim) : item.fim;
+    const proximoStatus = dto.status ?? item.status;
 
-    if (entry.status === 'booked' && nextStatus === 'available') {
+    if (item.status === 'reservada' && proximoStatus === 'disponivel') {
       throw new BadRequestException(
         'Não é possível reabrir uma data já reservada',
       );
     }
 
-    this.validateTimeRange(nextStartTime, nextEndTime);
+    if (proximoInicio >= proximoFim) {
+      throw new BadRequestException('inicio deve ser anterior a fim');
+    }
 
-    const timeChanged =
-      dto.date ||
-      dto.startTime ||
-      dto.endTime ||
-      (dto.artistId && !entry.artistId.equals(nextArtistId));
+    const horarioMudou =
+      dto.inicio ||
+      dto.fim ||
+      (dto.artistaId && !item.artistaId.equals(proximoArtistaId));
 
-    if (timeChanged) {
-      await this.ensureNoOverlap(
-        nextArtistId,
-        nextDate,
-        nextStartTime,
-        nextEndTime,
+    if (horarioMudou) {
+      await this.garantirSemSobreposicao(
+        proximoArtistaId,
+        proximoInicio,
+        proximoFim,
         objectId,
       );
     }
 
-    entry.artistId = nextArtistId;
-    entry.date = nextDate;
-    entry.startTime = nextStartTime;
-    entry.endTime = nextEndTime;
-    entry.status = nextStatus;
-    if (dto.notes !== undefined) entry.notes = dto.notes;
-    if (dto.serviceId !== undefined) {
-      entry.serviceId = this.ensureObjectId(dto.serviceId, 'serviceId');
+    item.artistaId = proximoArtistaId;
+    item.inicio = proximoInicio;
+    item.fim = proximoFim;
+    item.status = proximoStatus;
+    if (dto.observacoes !== undefined) item.observacoes = dto.observacoes;
+    if (dto.servicoId !== undefined) {
+      item.servicoId = this.garantirObjectId(dto.servicoId, 'servicoId');
     }
 
-    await entry.save();
-    return entry.toObject();
+    await item.save();
+    return item.toObject();
   }
 
-  async remove(id: string, requesterArtistId: string) {
-    const objectId = this.ensureObjectId(id, 'id');
-    const entry = await this.model.findById(objectId);
-    if (!entry) {
+  async remover(id: string, artistaIdSolicitante: string) {
+    const objectId = this.garantirObjectId(id, 'id');
+    const item = await this.model.findById(objectId);
+    if (!item) {
       throw new NotFoundException('Agenda não encontrada');
     }
-    if (!entry.artistId.equals(requesterArtistId)) {
+    if (!item.artistaId.equals(artistaIdSolicitante)) {
       throw new ForbiddenException(
         'Você só pode deletar horários da sua própria agenda',
       );
     }
-    if (entry.status === 'booked') {
+    if (item.status === 'reservada') {
       throw new BadRequestException(
         'Não é possível deletar um horário reservado. Cancele primeiro.',
       );
     }
-    if (entry.status === 'completed') {
+    if (item.status === 'concluida') {
       throw new BadRequestException(
         'Não é possível deletar um horário concluído (histórico)',
       );
     }
-    await entry.deleteOne();
-    return { deleted: true } as const;
+    await item.deleteOne();
+    return { removido: true } as const;
   }
 
-  async book(
+  async reservar(
     id: string,
-    clientId: string,
-    options?: { notes?: string; serviceId?: string },
+    clienteId: string,
+    opcoes?: { observacoes?: string; servicoId?: string },
   ) {
-    const objectId = this.ensureObjectId(id, 'id');
-    const entry = await this.model.findById(objectId);
-    if (!entry) {
+    const objectId = this.garantirObjectId(id, 'id');
+    const item = await this.model.findById(objectId);
+    if (!item) {
       throw new NotFoundException('Agenda não encontrada');
     }
-    if (entry.status !== 'available') {
+    if (item.status !== 'disponivel') {
       throw new ConflictException('Este horário não está disponível');
     }
 
-    entry.status = 'booked';
-    entry.clientId = this.ensureObjectId(clientId, 'clientId');
-    if (options?.notes) entry.notes = options.notes;
-    if (options?.serviceId) {
-      entry.serviceId = this.ensureObjectId(options.serviceId, 'serviceId');
+    item.status = 'reservada';
+    item.clienteId = this.garantirObjectId(clienteId, 'clienteId');
+    if (opcoes?.observacoes) item.observacoes = opcoes.observacoes;
+    if (opcoes?.servicoId) {
+      item.servicoId = this.garantirObjectId(opcoes.servicoId, 'servicoId');
     }
 
-    await entry.save();
-    return entry.toObject();
+    await item.save();
+    return item.toObject();
   }
 
-  async cancel(id: string, requesterId: string) {
-    const objectId = this.ensureObjectId(id, 'id');
-    const entry = await this.model.findById(objectId);
-    if (!entry) {
+  async cancelar(id: string, idSolicitante: string) {
+    const objectId = this.garantirObjectId(id, 'id');
+    const item = await this.model.findById(objectId);
+    if (!item) {
       throw new NotFoundException('Agenda não encontrada');
     }
 
-    const isArtistOwner = entry.artistId.equals(requesterId);
-    const isClientOwner =
-      entry.clientId && entry.clientId.equals(requesterId);
+    const ehDonoArtista = item.artistaId.equals(idSolicitante);
+    const ehDonoCliente = item.clienteId && item.clienteId.equals(idSolicitante);
 
-    if (!isArtistOwner && !isClientOwner) {
+    if (!ehDonoArtista && !ehDonoCliente) {
       throw new ForbiddenException(
         'Você só pode cancelar reservas suas ou da sua agenda',
       );
     }
 
-    if (entry.status === 'cancelled') {
+    if (item.status === 'cancelada') {
       throw new BadRequestException('Este horário já está cancelado');
     }
-    if (entry.status === 'completed') {
+    if (item.status === 'concluida') {
       throw new BadRequestException(
         'Não é possível cancelar um horário já concluído',
       );
     }
 
-    entry.status = 'cancelled';
-    await entry.save();
-    return entry.toObject();
+    item.status = 'cancelada';
+    await item.save();
+    return item.toObject();
   }
 
-  async listFuture(artistId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return this.listByArtist({
-      artistId,
-      from: today.toISOString(),
+  async listarFuturos(artistaId: string) {
+    return this.listarPorArtista({
+      artistaId,
+      de: new Date().toISOString(),
     });
   }
 
-  async listMyBookings(clientId: string) {
-    const objectId = this.ensureObjectId(clientId, 'clientId');
+  async listarMinhasReservas(clienteId: string) {
+    const objectId = this.garantirObjectId(clienteId, 'clienteId');
     return this.model
-      .find({ clientId: objectId, status: 'booked' })
-      .sort({ date: 1, startTime: 1 })
+      .find({ clienteId: objectId, status: 'reservada' })
+      .sort({ inicio: 1 })
       .lean();
   }
 
-  private ensureObjectId(value: string, field: string): Types.ObjectId {
-    if (!Types.ObjectId.isValid(value)) {
-      throw new BadRequestException(`Campo ${field} inválido`);
+  // ---------- helpers ----------
+
+  private garantirObjectId(valor: string, campo: string): Types.ObjectId {
+    if (!Types.ObjectId.isValid(valor)) {
+      throw new BadRequestException(`Campo ${campo} inválido`);
     }
-    return new Types.ObjectId(value);
+    return new Types.ObjectId(valor);
   }
 
-  private ensureDateOnly(value: string | Date, field: string): Date {
-    const raw = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(raw.getTime())) {
-      throw new BadRequestException(`Campo ${field} deve ser uma data válida`);
+  private parseEValidarInstantes(
+    inicioIso: string,
+    fimIso: string,
+  ): { inicio: Date; fim: Date } {
+    const inicio = new Date(inicioIso);
+    const fim = new Date(fimIso);
+    if (Number.isNaN(inicio.getTime())) {
+      throw new BadRequestException('inicio inválido');
     }
-    // Normaliza pra UTC 00:00 — o "dia" é o que importa, hora vai em startTime/endTime
-    return new Date(
-      Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()),
-    );
+    if (Number.isNaN(fim.getTime())) {
+      throw new BadRequestException('fim inválido');
+    }
+    if (inicio >= fim) {
+      throw new BadRequestException('inicio deve ser anterior a fim');
+    }
+    return { inicio, fim };
   }
 
-  private validateTimeRange(startTime: string, endTime: string) {
-    if (this.timeToMinutes(startTime) >= this.timeToMinutes(endTime)) {
+  private validarNaoRetroativo(inicio: Date) {
+    if (inicio.getTime() < Date.now()) {
       throw new BadRequestException(
-        'startTime deve ser anterior a endTime',
+        'Não é possível criar horário com início no passado',
       );
     }
   }
 
-  /** Rejeita slot/agendamento com data+hora no passado. */
-  private validateNotRetroactive(date: Date, startTime: string) {
-    // Data armazenada como UTC midnight, hora local é HH:mm.
-    // Compõe ISO local-like: "YYYY-MM-DDTHH:mm" e compara com agora.
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    const slotInstant = new Date(`${y}-${m}-${d}T${startTime}:00`);
-    if (slotInstant.getTime() < Date.now()) {
-      throw new BadRequestException(
-        'Não é possível criar horário ou solicitação em data/hora passada',
-      );
-    }
-  }
-
-  private timeToMinutes(hhmm: string): number {
-    const [h, m] = hhmm.split(':').map(Number);
-    return h * 60 + m;
-  }
-
-  private async ensureNoOverlap(
-    artistId: Types.ObjectId,
-    date: Date,
-    startTime: string,
-    endTime: string,
-    ignoreId?: Types.ObjectId,
+  private async garantirSemSobreposicao(
+    artistaId: Types.ObjectId,
+    inicio: Date,
+    fim: Date,
+    ignorarId?: Types.ObjectId,
   ) {
-    const query: FilterQuery<ScheduleDocument> = {
-      artistId,
-      date,
-      status: { $ne: 'cancelled' },
-      // overlap: existing.startTime < new.endTime AND existing.endTime > new.startTime
-      startTime: { $lt: endTime },
-      endTime: { $gt: startTime },
+    const query: FilterQuery<ItemAgendaDocument> = {
+      artistaId,
+      status: { $nin: ['cancelada', 'concluida'] },
+      inicio: { $lt: fim },
+      fim: { $gt: inicio },
     };
 
-    if (ignoreId) {
-      query._id = { $ne: ignoreId } as any;
+    if (ignorarId) {
+      query._id = { $ne: ignorarId } as any;
     }
 
-    const conflict = await this.model.findOne(query).lean();
-    if (conflict) {
+    const conflito = await this.model.findOne(query).lean();
+    if (conflito) {
       throw new ConflictException(
-        `Conflito de horário: já existe ${conflict.startTime}–${conflict.endTime} nesta data`,
+        `Conflito de horário: já existe ${conflito.inicio.toISOString()} → ${conflito.fim.toISOString()}`,
       );
     }
   }

@@ -2,24 +2,20 @@ import { Module } from '@nestjs/common';
 import { ArtistsService } from './artists.service';
 import { ArtistsController } from './artists.controller';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Artist, ArtistSchema } from './schemas/artist.schema';
-import {
-  ServiceOffering,
-  ServiceOfferingSchema,
-} from '../services/schemas/service.schema';
-import {
-  ScheduleEntry,
-  ScheduleSchema,
-} from '../schedule/schemas/schedule.schema';
-import { Review, ReviewSchema } from '../reviews/schemas/review.schema';
+import { Artista, ArtistaSchema } from './schemas/artist.schema';
+import { Usuario, UsuarioSchema } from '../users/schemas/user.schema';
+import { Servico, ServicoSchema } from '../services/schemas/service.schema';
+import { ItemAgenda, ItemAgendaSchema } from '../schedule/schemas/schedule.schema';
+import { Avaliacao, AvaliacaoSchema } from '../reviews/schemas/review.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: Artist.name, schema: ArtistSchema },
-      { name: ServiceOffering.name, schema: ServiceOfferingSchema },
-      { name: ScheduleEntry.name, schema: ScheduleSchema },
-      { name: Review.name, schema: ReviewSchema },
+      { name: Artista.name, schema: ArtistaSchema },
+      { name: Usuario.name, schema: UsuarioSchema },
+      { name: Servico.name, schema: ServicoSchema },
+      { name: ItemAgenda.name, schema: ItemAgendaSchema },
+      { name: Avaliacao.name, schema: AvaliacaoSchema },
     ]),
   ],
   controllers: [ArtistsController],

@@ -10,68 +10,83 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { User } from './schemas/user.schema';
+import { CriarUsuarioDto } from './dto/create-user.dto';
+import { Usuario } from './schemas/user.schema';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { PapeisGuard } from '../auth/roles.guard';
+import { Papeis } from '../auth/roles.decorator';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
 
-function ensureOwner(paramId: string, user: JwtUser) {
-  if (paramId !== user.sub && user.role !== 'admin') {
+function garantirDono(paramId: string, user: UsuarioJwt) {
+  if (paramId !== user.sub && user.papel !== 'admin') {
     throw new ForbiddenException(
       'Você só pode acessar/modificar seu próprio perfil',
     );
   }
 }
 
-@Controller('users')
+@Controller('usuarios')
 export class UsersController {
   constructor(private readonly service: UsersService) {}
 
   @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.service.create(dto);
+  criar(@Body() dto: CriarUsuarioDto) {
+    return this.service.criar(dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(): Promise<User[]> {
-    // TODO: restringir a admin quando role admin existir
-    return this.service.findAll();
+  listar(): Promise<Usuario[]> {
+    return this.service.listar();
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  find(
+  buscar(
     @Param('id') id: string,
-    @CurrentUser() user: JwtUser,
-  ): Promise<User | null> {
-    ensureOwner(id, user);
-    return this.service.findById(id);
+    @UsuarioAtual() user: UsuarioJwt,
+  ): Promise<Usuario | null> {
+    garantirDono(id, user);
+    return this.service.buscarPorId(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
   @Patch(':id')
-  update(
+  atualizar(
     @Param('id') id: string,
-    @Body() dto: Partial<CreateUserDto>,
-    @CurrentUser() user: JwtUser,
-  ): Promise<User> {
-    ensureOwner(id, user);
-    return this.service.update(id, dto);
+    @Body() dto: Partial<CriarUsuarioDto>,
+    @UsuarioAtual() user: UsuarioJwt,
+  ): Promise<Usuario> {
+    garantirDono(id, user);
+    return this.service.atualizar(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
-  @Delete(':id')
-  remove(
+  /**
+   * Desativa a conta (soft delete em cascata: Usuario + Artista linkado).
+   * Reversível: ao logar novamente, conta é reativada automaticamente.
+   */
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
+  @Patch(':id/desativar')
+  desativar(
     @Param('id') id: string,
-    @CurrentUser() user: JwtUser,
-  ): Promise<{ deleted: boolean }> {
-    ensureOwner(id, user);
-    return this.service.remove(id);
+    @UsuarioAtual() user: UsuarioJwt,
+  ): Promise<{ desativadaEm: Date }> {
+    garantirDono(id, user);
+    return this.service.desativarConta(id);
+  }
+
+  /** Hard delete (admin / dev). Frontend usa /desativar. */
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('admin')
+  @Delete(':id')
+  remover(
+    @Param('id') id: string,
+    @UsuarioAtual() user: UsuarioJwt,
+  ): Promise<{ removido: boolean }> {
+    garantirDono(id, user);
+    return this.service.remover(id);
   }
 }

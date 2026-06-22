@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -9,59 +10,66 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ServicesService } from './services.service';
-import { CreateServiceOfferingDto } from './dto/create-service.dto';
-import { UpdateServiceOfferingDto } from './dto/update-service.dto';
+import { CriarServicoDto } from './dto/create-service.dto';
+import { AtualizarServicoDto } from './dto/update-service.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { PapeisGuard } from '../auth/roles.guard';
+import { Papeis } from '../auth/roles.decorator';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
 
-@Controller('service-offerings')
+function exigirArtistaId(user: UsuarioJwt): string {
+  if (!user.artistaId) {
+    throw new ForbiddenException(
+      'Você precisa ter perfil de artista para esta ação',
+    );
+  }
+  return user.artistaId;
+}
+
+@Controller('servicos')
 export class ServicesController {
   constructor(private readonly service: ServicesService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Post()
-  create(@Body() dto: CreateServiceOfferingDto, @CurrentUser() user: JwtUser) {
-    return this.service.create(dto, user.sub);
+  criar(@Body() dto: CriarServicoDto, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.criar(dto, exigirArtistaId(user));
   }
 
-  // Artista vê os próprios serviços (incluindo inativos)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Get('mine')
-  mine(@CurrentUser() user: JwtUser) {
-    return this.service.byArtist(user.sub, true);
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
+  @Get('meus')
+  meus(@UsuarioAtual() user: UsuarioJwt) {
+    return this.service.porArtista(exigirArtistaId(user), true);
   }
 
-  // Público — clientes vendo serviços ativos de um artista
-  @Get('artist/:artistId')
-  byArtist(@Param('artistId') id: string) {
-    return this.service.byArtist(id, false);
+  @Get('artista/:artistaId')
+  porArtista(@Param('artistaId') id: string) {
+    return this.service.porArtista(id, false);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findById(id);
+  buscarPorId(@Param('id') id: string) {
+    return this.service.buscarPorId(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Patch(':id')
-  update(
+  atualizar(
     @Param('id') id: string,
-    @Body() dto: UpdateServiceOfferingDto,
-    @CurrentUser() user: JwtUser,
+    @Body() dto: AtualizarServicoDto,
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    return this.service.update(id, dto, user.sub);
+    return this.service.atualizar(id, dto, exigirArtistaId(user));
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.sub);
+  remover(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    return this.service.remover(id, exigirArtistaId(user));
   }
 }

@@ -4,48 +4,44 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
 } from 'class-validator';
 
-export const scheduleStatusValues = [
-  'available',
-  'pending',
-  'booked',
-  'completed',
-  'cancelled',
+export const statusAgendaValores = [
+  'disponivel',
+  'pendente',
+  'reservada',
+  'concluida',
+  'cancelada',
 ] as const;
-export type ScheduleStatus = (typeof scheduleStatusValues)[number];
+export type StatusAgenda = (typeof statusAgendaValores)[number];
 
-const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-export class CreateScheduleDto {
+export class CriarItemAgendaDto {
   @IsMongoId()
-  artistId!: string;
+  artistaId!: string;
 
+  /** ISO 8601 com timezone (ex: 2026-06-21T22:00:00-03:00) */
   @IsDateString()
-  date!: string;
+  inicio!: string;
 
-  @Matches(TIME_REGEX, { message: 'startTime deve estar no formato HH:mm (24h)' })
-  startTime!: string;
-
-  @Matches(TIME_REGEX, { message: 'endTime deve estar no formato HH:mm (24h)' })
-  endTime!: string;
+  /** ISO 8601 com timezone. Deve ser estritamente > inicio. */
+  @IsDateString()
+  fim!: string;
 
   @IsOptional()
-  @IsIn(scheduleStatusValues)
-  status?: ScheduleStatus;
+  @IsIn(statusAgendaValores)
+  status?: StatusAgenda;
 
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  notes?: string;
+  observacoes?: string;
 
   @IsOptional()
   @IsMongoId()
-  serviceId?: string;
+  servicoId?: string;
 
   @IsOptional()
   @IsMongoId()
-  clientId?: string;
+  clienteId?: string;
 }

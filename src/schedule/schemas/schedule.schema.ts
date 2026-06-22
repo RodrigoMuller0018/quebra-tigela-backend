@@ -1,40 +1,48 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-@Schema({ collection: 'schedule', timestamps: true })
-export class ScheduleEntry {
+export const STATUS_AGENDA = [
+  'disponivel',
+  'pendente',
+  'reservada',
+  'concluida',
+  'cancelada',
+] as const;
+export type StatusAgenda = (typeof STATUS_AGENDA)[number];
+
+@Schema({ collection: 'agenda', timestamps: true })
+export class ItemAgenda {
   _id!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Artist', required: true, index: true })
-  artistId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Artista', required: true, index: true })
+  artistaId!: Types.ObjectId;
 
+  /** Instante de início (UTC). Suporta eventos multi-dia. */
   @Prop({ type: Date, required: true, index: true })
-  date!: Date;
+  inicio!: Date;
 
-  @Prop({ required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ })
-  startTime!: string;
-
-  @Prop({ required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ })
-  endTime!: string;
+  /** Instante de fim (UTC). Deve ser estritamente > inicio. */
+  @Prop({ type: Date, required: true, index: true })
+  fim!: Date;
 
   @Prop({
     required: true,
-    enum: ['available', 'pending', 'booked', 'completed', 'cancelled'],
-    default: 'available',
+    enum: STATUS_AGENDA,
+    default: 'disponivel',
     index: true,
   })
-  status!: 'available' | 'pending' | 'booked' | 'completed' | 'cancelled';
+  status!: StatusAgenda;
 
   @Prop()
-  notes?: string;
+  observacoes?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', index: true })
-  clientId?: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Usuario', index: true })
+  clienteId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ServiceOffering' })
-  serviceId?: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Servico' })
+  servicoId?: Types.ObjectId;
 }
 
-export type ScheduleDocument = HydratedDocument<ScheduleEntry>;
-export const ScheduleSchema = SchemaFactory.createForClass(ScheduleEntry);
-ScheduleSchema.index({ artistId: 1, date: 1, startTime: 1 });
+export type ItemAgendaDocument = HydratedDocument<ItemAgenda>;
+export const ItemAgendaSchema = SchemaFactory.createForClass(ItemAgenda);
+ItemAgendaSchema.index({ artistaId: 1, inicio: 1 });

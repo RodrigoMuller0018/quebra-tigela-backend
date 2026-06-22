@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -12,117 +13,130 @@ import {
 } from '@nestjs/common';
 import { ScheduleService } from './schedule.service';
 import {
-  CreateScheduleDto,
-  scheduleStatusValues,
+  CriarItemAgendaDto,
+  statusAgendaValores,
 } from './dto/create-schedule.dto';
-import type { ScheduleStatus } from './dto/create-schedule.dto';
-import { UpdateScheduleDto } from './dto/update-schedule.dto';
-import { BatchCreateScheduleDto } from './dto/batch-schedule.dto';
+import type { StatusAgenda } from './dto/create-schedule.dto';
+import { AtualizarItemAgendaDto } from './dto/update-schedule.dto';
+import { CriarItensAgendaEmLoteDto } from './dto/batch-schedule.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtUser } from '../auth/current-user.decorator';
+import { PapeisGuard } from '../auth/roles.guard';
+import { Papeis } from '../auth/roles.decorator';
+import { UsuarioAtual } from '../auth/current-user.decorator';
+import type { UsuarioJwt } from '../auth/current-user.decorator';
 
-@Controller('schedule')
+function exigirArtistaId(user: UsuarioJwt): string {
+  if (!user.artistaId) {
+    throw new ForbiddenException(
+      'Você precisa ter perfil de artista para esta ação',
+    );
+  }
+  return user.artistaId;
+}
+
+@Controller('agenda')
 export class ScheduleController {
   constructor(private readonly service: ScheduleService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Post()
-  create(@Body() dto: CreateScheduleDto, @CurrentUser() user: JwtUser) {
-    if (dto.artistId !== user.sub) {
+  criar(@Body() dto: CriarItemAgendaDto, @UsuarioAtual() user: UsuarioJwt) {
+    const artistaId = exigirArtistaId(user);
+    if (dto.artistaId !== artistaId) {
       throw new BadRequestException(
-        'artistId deve ser o seu próprio (do token)',
+        'artistaId deve ser o seu próprio (do token)',
       );
     }
-    return this.service.create(dto);
+    return this.service.criar(dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
-  @Post('batch')
-  batch(@Body() dto: BatchCreateScheduleDto, @CurrentUser() user: JwtUser) {
-    const invalid = dto.schedules.find((s) => s.artistId !== user.sub);
-    if (invalid) {
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
+  @Post('lote')
+  emLote(@Body() dto: CriarItensAgendaEmLoteDto, @UsuarioAtual() user: UsuarioJwt) {
+    const artistaId = exigirArtistaId(user);
+    const invalido = dto.itens.find((s) => s.artistaId !== artistaId);
+    if (invalido) {
       throw new BadRequestException(
         'Todos os horários devem ser do seu próprio artista',
       );
     }
-    return this.service.createMany(dto.schedules);
+    return this.service.criarEmLote(dto.itens);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
-  @Get('my-bookings')
-  myBookings(@CurrentUser() user: JwtUser) {
-    return this.service.listMyBookings(user.sub);
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
+  @Get('minhas-reservas')
+  minhasReservas(@UsuarioAtual() user: UsuarioJwt) {
+    return this.service.listarMinhasReservas(user.sub);
   }
 
-  @Get('artist/:artistId/future')
-  listFuture(@Param('artistId') id: string) {
-    return this.service.listFuture(id);
+  @Get('artista/:artistaId/futuros')
+  listarFuturos(@Param('artistaId') id: string) {
+    return this.service.listarFuturos(id);
   }
 
-  @Get('artist/:artistId')
-  listByArtist(
-    @Param('artistId') artistId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('status') status?: ScheduleStatus,
-    @Query('limit') limit?: string,
+  @Get('artista/:artistaId')
+  listarPorArtista(
+    @Param('artistaId') artistaId: string,
+    @Query('de') de?: string,
+    @Query('ate') ate?: string,
+    @Query('status') status?: StatusAgenda,
+    @Query('limite') limite?: string,
   ) {
-    if (status && !scheduleStatusValues.includes(status)) {
+    if (status && !statusAgendaValores.includes(status)) {
       throw new BadRequestException('Status de agenda inválido');
     }
-    return this.service.listByArtist({
-      artistId,
-      from,
-      to,
+    return this.service.listarPorArtista({
+      artistaId,
+      de,
+      ate,
       status,
-      limit: limit ? Number(limit) : undefined,
+      limite: limite ? Number(limite) : undefined,
     });
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findById(id);
+  buscarPorId(@Param('id') id: string) {
+    return this.service.buscarPorId(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('client')
-  @Post(':id/book')
-  book(
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('cliente')
+  @Post(':id/reservar')
+  reservar(
     @Param('id') id: string,
-    @Body() body: { notes?: string; serviceId?: string },
-    @CurrentUser() user: JwtUser,
+    @Body() body: { observacoes?: string; servicoId?: string },
+    @UsuarioAtual() user: UsuarioJwt,
   ) {
-    return this.service.book(id, user.sub, body);
+    return this.service.reservar(id, user.sub, body);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post(':id/cancel')
-  cancel(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.cancel(id, user.sub);
+  @Post(':id/cancelar')
+  cancelar(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    const identidade = user.artistaId ?? user.sub;
+    return this.service.cancelar(id, identidade);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateScheduleDto) {
+  atualizar(@Param('id') id: string, @Body() dto: AtualizarItemAgendaDto) {
     if (!dto || Object.keys(dto).length === 0) {
       throw new BadRequestException(
         'Informe pelo menos um campo para atualização da agenda',
       );
     }
-    return this.service.update(id, dto);
+    return this.service.atualizar(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('artist')
+  @UseGuards(JwtAuthGuard, PapeisGuard)
+  @Papeis('artista')
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.service.remove(id, user.sub);
+  remover(@Param('id') id: string, @UsuarioAtual() user: UsuarioJwt) {
+    const artistaId = exigirArtistaId(user);
+    return this.service.remover(id, artistaId);
   }
 }

@@ -1,31 +1,33 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-class Media {
-  @Prop({ required: true, enum: ['image', 'video'] }) type: 'image' | 'video';
-  @Prop({ required: true }) url: string;
-}
-
-@Schema({ collection: 'services' })
-export class ServiceOffering {
-  _id: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, ref: 'Artist', required: true, index: true })
-  artistId: Types.ObjectId;
+class Midia {
+  @Prop({ required: true, enum: ['imagem', 'video'] })
+  tipo!: 'imagem' | 'video';
 
   @Prop({ required: true })
-  title: string;
+  url!: string;
+}
+
+@Schema({ collection: 'servicos' })
+export class Servico {
+  _id!: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Artista', required: true, index: true })
+  artistaId!: Types.ObjectId;
+
+  @Prop({ required: true })
+  titulo!: string;
 
   @Prop()
-  description?: string;
+  descricao?: string;
 
-  @Prop({ type: [Media], default: [] })
-  media: Media[];
+  @Prop({ type: [Midia], default: [] })
+  midia!: Midia[];
 
   @Prop({ default: true, index: true })
-  active: boolean;
+  ativo!: boolean;
 }
-export type ServiceOfferingDocument = HydratedDocument<ServiceOffering>;
-export const ServiceOfferingSchema =
-  SchemaFactory.createForClass(ServiceOffering);
-ServiceOfferingSchema.index({ artistId: 1, active: 1 });
+export type ServicoDocument = HydratedDocument<Servico>;
+export const ServicoSchema = SchemaFactory.createForClass(Servico);
+ServicoSchema.index({ artistaId: 1, ativo: 1 });

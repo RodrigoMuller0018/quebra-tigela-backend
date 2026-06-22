@@ -2,47 +2,49 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 @Schema({ _id: false })
-class ArtistReply {
+class RespostaArtista {
   @Prop({ required: true })
-  text!: string;
+  texto!: string;
 
   @Prop({ type: Date, default: Date.now })
-  repliedAt!: Date;
+  respondidaEm!: Date;
 }
 
 @Schema({
-  collection: 'reviews',
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  collection: 'avaliacoes',
+  timestamps: { createdAt: 'criadaEm', updatedAt: 'atualizadaEm' },
 })
-export class Review {
+export class Avaliacao {
   _id!: Types.ObjectId;
 
-  // 1 review por solicitação. O artistId/userId são denormalizados a partir do request
-  // pra facilitar agregações (média por artista, lista por cliente).
+  /**
+   * 1 avaliação por solicitação. artistaId/usuarioId são denormalizados a partir
+   * da Solicitacao pra facilitar agregações (média por artista, lista por cliente).
+   */
   @Prop({
     type: Types.ObjectId,
-    ref: 'Request',
+    ref: 'Solicitacao',
     required: true,
     unique: true,
     index: true,
   })
-  requestId!: Types.ObjectId;
+  solicitacaoId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Artist', required: true, index: true })
-  artistId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Artista', required: true, index: true })
+  artistaId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId!: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Usuario', required: true, index: true })
+  usuarioId!: Types.ObjectId;
 
   @Prop({ min: 1, max: 5, required: true })
-  rating!: number;
+  nota!: number;
 
   @Prop()
-  comment?: string;
+  comentario?: string;
 
-  @Prop({ type: ArtistReply })
-  artistReply?: ArtistReply;
+  @Prop({ type: RespostaArtista })
+  respostaArtista?: RespostaArtista;
 }
 
-export type ReviewDocument = HydratedDocument<Review>;
-export const ReviewSchema = SchemaFactory.createForClass(Review);
+export type AvaliacaoDocument = HydratedDocument<Avaliacao>;
+export const AvaliacaoSchema = SchemaFactory.createForClass(Avaliacao);

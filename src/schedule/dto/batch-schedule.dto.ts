@@ -1,11 +1,11 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, ValidateNested } from 'class-validator';
-import { CreateScheduleDto } from './create-schedule.dto';
+import { CriarItemAgendaDto } from './create-schedule.dto';
 
-export class BatchCreateScheduleDto {
+export class CriarItensAgendaEmLoteDto {
   @ValidateNested({ each: true })
-  @Type(() => CreateScheduleDto)
+  @Type(() => CriarItemAgendaDto)
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
-  schedules!: CreateScheduleDto[];
+  itens!: CriarItemAgendaDto[];
 }

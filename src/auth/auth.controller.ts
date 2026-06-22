@@ -1,33 +1,28 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
-@Controller('auth')
+@Controller('autenticacao')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  @Post('register/user')
-  registerUser(@Body() dto) {
-    return this.auth.registerUser(dto);
+  @Post('registrar/usuario')
+  registrarUsuario(@Body() dto: any) {
+    return this.auth.registrarUsuario(dto);
   }
 
-  @Post('register/artist')
-  registerArtist(@Body() dto) {
-    return this.auth.registerArtist(dto);
+  @Post('registrar/artista')
+  registrarArtista(@Body() dto: any) {
+    return this.auth.registrarArtista(dto);
   }
 
   @Post('login')
-  login(
-    @Body()
-    dto: {
-      email: string;
-      password: string;
-      accountType?: 'client' | 'artist';
-    },
-  ) {
-    return this.auth.login(
-      dto.email,
-      dto.password,
-      dto.accountType ?? 'client',
-    );
+  login(@Body() dto: { email: string; senha: string }) {
+    return this.auth.login(dto.email, dto.senha);
+  }
+
+  /** Reativa conta desativada (chamado após o usuário confirmar no modal). */
+  @Post('reativar')
+  reativarConta(@Body() dto: { email: string; senha: string }) {
+    return this.auth.reativarConta(dto.email, dto.senha);
   }
 }

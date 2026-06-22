@@ -4,43 +4,36 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
 } from 'class-validator';
 import {
-  scheduleStatusValues,
-  type ScheduleStatus,
+  statusAgendaValores,
+  type StatusAgenda,
 } from './create-schedule.dto';
 
-const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-export class UpdateScheduleDto {
+export class AtualizarItemAgendaDto {
   @IsOptional()
   @IsMongoId()
-  artistId?: string;
+  artistaId?: string;
 
   @IsOptional()
   @IsDateString()
-  date?: string;
+  inicio?: string;
 
   @IsOptional()
-  @Matches(TIME_REGEX, { message: 'startTime deve estar no formato HH:mm (24h)' })
-  startTime?: string;
+  @IsDateString()
+  fim?: string;
 
   @IsOptional()
-  @Matches(TIME_REGEX, { message: 'endTime deve estar no formato HH:mm (24h)' })
-  endTime?: string;
-
-  @IsOptional()
-  @IsIn(scheduleStatusValues)
-  status?: ScheduleStatus;
+  @IsIn(statusAgendaValores)
+  status?: StatusAgenda;
 
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  notes?: string;
+  observacoes?: string;
 
   @IsOptional()
   @IsMongoId()
-  serviceId?: string;
+  servicoId?: string;
 }

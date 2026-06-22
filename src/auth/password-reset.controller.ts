@@ -4,22 +4,22 @@ import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { ValidateResetCodeDto } from './dto/validate-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
-@Controller('auth/password-reset')
+@Controller('autenticacao/recuperar-senha')
 export class PasswordResetController {
   constructor(private readonly service: PasswordResetService) {}
 
-  @Post('request')
-  request(@Body() dto: RequestPasswordResetDto) {
-    return this.service.requestReset(dto.email);
+  @Post('solicitar')
+  solicitar(@Body() dto: RequestPasswordResetDto) {
+    return this.service.pedirReset(dto.email);
   }
 
-  @Post('validate')
-  validate(@Body() dto: ValidateResetCodeDto) {
-    return this.service.validateCode(dto.email, dto.code);
+  @Post('validar')
+  validar(@Body() dto: ValidateResetCodeDto) {
+    return this.service.validarCodigo(dto.email, dto.code);
   }
 
-  @Post('reset')
-  reset(@Body() dto: ResetPasswordDto) {
-    return this.service.resetPassword(dto.email, dto.code, dto.newPassword);
+  @Post('redefinir')
+  redefinir(@Body() dto: ResetPasswordDto) {
+    return this.service.redefinirSenha(dto.email, dto.code, dto.newPassword);
   }
 }

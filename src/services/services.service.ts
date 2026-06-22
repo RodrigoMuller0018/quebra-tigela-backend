@@ -5,72 +5,69 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  ServiceOffering,
-  ServiceOfferingDocument,
-} from './schemas/service.schema';
-import { CreateServiceOfferingDto } from './dto/create-service.dto';
-import { UpdateServiceOfferingDto } from './dto/update-service.dto';
+import { Servico, ServicoDocument } from './schemas/service.schema';
+import { CriarServicoDto } from './dto/create-service.dto';
+import { AtualizarServicoDto } from './dto/update-service.dto';
 
 @Injectable()
 export class ServicesService {
   constructor(
-    @InjectModel(ServiceOffering.name)
-    private model: Model<ServiceOfferingDocument>,
+    @InjectModel(Servico.name)
+    private model: Model<ServicoDocument>,
   ) {}
 
-  create(dto: CreateServiceOfferingDto, currentArtistId: string) {
+  criar(dto: CriarServicoDto, artistaAtualId: string) {
     return this.model.create({
       ...dto,
-      artistId: new Types.ObjectId(currentArtistId),
+      artistaId: new Types.ObjectId(artistaAtualId),
     });
   }
 
-  byArtist(artistId: string, includeInactive = false) {
-    const query: { artistId: Types.ObjectId; active?: boolean } = {
-      artistId: new Types.ObjectId(artistId),
+  porArtista(artistaId: string, incluirInativos = false) {
+    const query: { artistaId: Types.ObjectId; ativo?: boolean } = {
+      artistaId: new Types.ObjectId(artistaId),
     };
-    if (!includeInactive) query.active = true;
+    if (!incluirInativos) query.ativo = true;
     return this.model.find(query);
   }
 
-  async findById(id: string) {
-    const found = await this.model.findById(id);
-    if (!found) throw new NotFoundException('Serviço não encontrado');
-    return found;
+  async buscarPorId(id: string) {
+    const encontrado = await this.model.findById(id);
+    if (!encontrado) throw new NotFoundException('Serviço não encontrado');
+    return encontrado;
   }
 
-  async update(
+  async atualizar(
     id: string,
-    dto: UpdateServiceOfferingDto,
-    currentArtistId: string,
+    dto: AtualizarServicoDto,
+    artistaAtualId: string,
   ) {
-    const entry = await this.model.findById(id);
-    if (!entry) throw new NotFoundException('Serviço não encontrado');
-    if (!entry.artistId.equals(currentArtistId)) {
+    const item = await this.model.findById(id);
+    if (!item) throw new NotFoundException('Serviço não encontrado');
+    if (!item.artistaId.equals(artistaAtualId)) {
       throw new ForbiddenException(
         'Você só pode editar seus próprios serviços',
       );
     }
 
-    if (dto.title !== undefined) entry.title = dto.title;
-    if (dto.description !== undefined) entry.description = dto.description;
-    if (dto.media !== undefined) entry.media = dto.media;
-    if (dto.active !== undefined) entry.active = dto.active;
+    if (dto.titulo !== undefined) item.titulo = dto.titulo;
+    if (dto.descricao !== undefined) item.descricao = dto.descricao;
+    if (dto.midia !== undefined) item.midia = dto.midia;
+    if (dto.ativo !== undefined) item.ativo = dto.ativo;
 
-    await entry.save();
-    return entry;
+    await item.save();
+    return item;
   }
 
-  async remove(id: string, currentArtistId: string) {
-    const entry = await this.model.findById(id);
-    if (!entry) throw new NotFoundException('Serviço não encontrado');
-    if (!entry.artistId.equals(currentArtistId)) {
+  async remover(id: string, artistaAtualId: string) {
+    const item = await this.model.findById(id);
+    if (!item) throw new NotFoundException('Serviço não encontrado');
+    if (!item.artistaId.equals(artistaAtualId)) {
       throw new ForbiddenException(
         'Você só pode excluir seus próprios serviços',
       );
     }
-    await entry.deleteOne();
-    return { deleted: true } as const;
+    await item.deleteOne();
+    return { removido: true } as const;
   }
 }

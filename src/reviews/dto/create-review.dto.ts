@@ -8,8 +8,8 @@ import {
   Min,
 } from 'class-validator';
 
-export class CreateReviewDto {
-  @IsMongoId() requestId!: string;
-  @IsInt() @Min(1) @Max(5) rating!: number;
-  @IsOptional() @IsString() @MaxLength(1000) comment?: string;
+export class CriarAvaliacaoDto {
+  @IsMongoId() solicitacaoId!: string;
+  @IsInt() @Min(1) @Max(5) nota!: number;
+  @IsOptional() @IsString() @MaxLength(1000) comentario?: string;
 }

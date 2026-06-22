@@ -1,17 +1,17 @@
 import { IsIn } from 'class-validator';
 
-export const allowedRequestStatusTransitions = [
-  'accepted',
-  'awaiting_confirmation',
-  'completed',
-  'rejected',
-  'cancelled',
+export const transicoesStatusSolicitacaoPermitidas = [
+  'aceita',
+  'aguardando_confirmacao',
+  'concluida',
+  'recusada',
+  'cancelada',
 ] as const;
 
-export type RequestStatusInput =
-  (typeof allowedRequestStatusTransitions)[number];
+export type EntradaStatusSolicitacao =
+  (typeof transicoesStatusSolicitacaoPermitidas)[number];
 
-export class UpdateRequestStatusDto {
-  @IsIn(allowedRequestStatusTransitions)
-  status!: RequestStatusInput;
+export class AtualizarStatusSolicitacaoDto {
+  @IsIn(transicoesStatusSolicitacaoPermitidas)
+  status!: EntradaStatusSolicitacao;
 }

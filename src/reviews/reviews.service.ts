@@ -7,46 +7,49 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Review, ReviewDocument } from './schemas/review.schema';
-import { Request, RequestDocument } from '../requests/schemas/request.schema';
-import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
+import { Avaliacao, AvaliacaoDocument } from './schemas/review.schema';
+import { Solicitacao, SolicitacaoDocument } from '../requests/schemas/request.schema';
+import { CriarAvaliacaoDto } from './dto/create-review.dto';
+import { AtualizarAvaliacaoDto } from './dto/update-review.dto';
+
+/**
+ * Janela em que cliente pode editar/excluir a avaliação e artista pode excluir
+ * a resposta. Depois disso vira imutável — evita revenge edit reativo e mantém
+ * o histórico público confiável.
+ */
+const JANELA_EDICAO_MS = 15 * 60_000;
 
 @Injectable()
 export class ReviewsService {
   constructor(
-    @InjectModel(Review.name) private reviewModel: Model<ReviewDocument>,
-    @InjectModel(Request.name) private reqModel: Model<RequestDocument>,
+    @InjectModel(Avaliacao.name) private avaliacaoModel: Model<AvaliacaoDocument>,
+    @InjectModel(Solicitacao.name) private solicModel: Model<SolicitacaoDocument>,
   ) {}
 
-  async create(dto: CreateReviewDto, currentUserId: string) {
-    const requestId = new Types.ObjectId(dto.requestId);
-    const userId = new Types.ObjectId(currentUserId);
+  async criar(dto: CriarAvaliacaoDto, usuarioAtualId: string) {
+    const solicitacaoId = new Types.ObjectId(dto.solicitacaoId);
+    const usuarioId = new Types.ObjectId(usuarioAtualId);
 
-    const request = await this.reqModel.findById(requestId);
-    if (!request) {
+    const sol = await this.solicModel.findById(solicitacaoId);
+    if (!sol) {
       throw new NotFoundException('Solicitação não encontrada');
     }
-    if (!request.userId.equals(userId)) {
-      throw new ForbiddenException(
-        'Você só pode avaliar solicitações suas',
-      );
+    if (!sol.usuarioId.equals(usuarioId)) {
+      throw new ForbiddenException('Você só pode avaliar solicitações suas');
     }
-    if (request.status !== 'completed') {
-      throw new BadRequestException(
-        'A solicitação ainda não foi concluída',
-      );
+    if (sol.status !== 'concluida') {
+      throw new BadRequestException('A solicitação ainda não foi concluída');
     }
 
     try {
-      const created = await this.reviewModel.create({
-        requestId,
-        artistId: request.artistId,
-        userId,
-        rating: dto.rating,
-        comment: dto.comment,
+      const criada = await this.avaliacaoModel.create({
+        solicitacaoId,
+        artistaId: sol.artistaId,
+        usuarioId,
+        nota: dto.nota,
+        comentario: dto.comentario,
       });
-      return created.populate('userId', 'name');
+      return criada.populate('usuarioId', 'nome');
     } catch (err: any) {
       if (err?.code === 11000) {
         throw new ConflictException(
@@ -57,71 +60,92 @@ export class ReviewsService {
     }
   }
 
-  async byArtist(artistId: string) {
-    return this.reviewModel
-      .find({ artistId: new Types.ObjectId(artistId) })
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name')
+  async porArtista(artistaId: string) {
+    return this.avaliacaoModel
+      .find({ artistaId: new Types.ObjectId(artistaId) })
+      .sort({ criadaEm: -1 })
+      .populate('usuarioId', 'nome')
       .lean();
   }
 
-  async byUser(userId: string) {
-    return this.reviewModel
-      .find({ userId: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name')
+  async porUsuario(usuarioId: string) {
+    return this.avaliacaoModel
+      .find({ usuarioId: new Types.ObjectId(usuarioId) })
+      .sort({ criadaEm: -1 })
+      .populate('usuarioId', 'nome')
       .lean();
   }
 
-  async update(id: string, dto: UpdateReviewDto, currentUserId: string) {
-    const review = await this.reviewModel.findById(id);
-    if (!review) throw new NotFoundException('Avaliação não encontrada');
-    if (!review.userId.equals(currentUserId)) {
+  async atualizar(id: string, dto: AtualizarAvaliacaoDto, usuarioAtualId: string) {
+    const aval = await this.avaliacaoModel.findById(id);
+    if (!aval) throw new NotFoundException('Avaliação não encontrada');
+    if (!aval.usuarioId.equals(usuarioAtualId)) {
       throw new ForbiddenException(
         'Você só pode editar suas próprias avaliações',
       );
     }
-    if (dto.rating !== undefined) review.rating = dto.rating;
-    if (dto.comment !== undefined) review.comment = dto.comment;
-    await review.save();
-    return review.populate('userId', 'name');
+    const criadaEm = (aval as any).criadaEm as Date | undefined;
+    if (criadaEm && Date.now() - criadaEm.getTime() > JANELA_EDICAO_MS) {
+      throw new ForbiddenException(
+        'Janela de edição expirou (15 minutos após a criação)',
+      );
+    }
+    if (dto.nota !== undefined) aval.nota = dto.nota;
+    if (dto.comentario !== undefined) aval.comentario = dto.comentario;
+    await aval.save();
+    return aval.populate('usuarioId', 'nome');
   }
 
-  async remove(id: string, currentUserId: string) {
-    const review = await this.reviewModel.findById(id);
-    if (!review) throw new NotFoundException('Avaliação não encontrada');
-    if (!review.userId.equals(currentUserId)) {
+  async remover(id: string, usuarioAtualId: string) {
+    const aval = await this.avaliacaoModel.findById(id);
+    if (!aval) throw new NotFoundException('Avaliação não encontrada');
+    if (!aval.usuarioId.equals(usuarioAtualId)) {
       throw new ForbiddenException(
         'Você só pode excluir suas próprias avaliações',
       );
     }
-    await review.deleteOne();
-    return { deleted: true } as const;
+    const criadaEm = (aval as any).criadaEm as Date | undefined;
+    if (criadaEm && Date.now() - criadaEm.getTime() > JANELA_EDICAO_MS) {
+      throw new ForbiddenException(
+        'Janela de exclusão expirou (15 minutos após a criação)',
+      );
+    }
+    await aval.deleteOne();
+    return { removida: true } as const;
   }
 
-  async reply(id: string, text: string, currentArtistId: string) {
-    const review = await this.reviewModel.findById(id);
-    if (!review) throw new NotFoundException('Avaliação não encontrada');
-    if (!review.artistId.equals(currentArtistId)) {
+  async responder(id: string, texto: string, artistaAtualId: string) {
+    const aval = await this.avaliacaoModel.findById(id);
+    if (!aval) throw new NotFoundException('Avaliação não encontrada');
+    if (!aval.artistaId.equals(artistaAtualId)) {
       throw new ForbiddenException(
         'Só o artista avaliado pode responder esta avaliação',
       );
     }
-    review.artistReply = { text, repliedAt: new Date() };
-    await review.save();
-    return review.populate('userId', 'name');
+    aval.respostaArtista = { texto, respondidaEm: new Date() };
+    await aval.save();
+    return aval.populate('usuarioId', 'nome');
   }
 
-  async deleteReply(id: string, currentArtistId: string) {
-    const review = await this.reviewModel.findById(id);
-    if (!review) throw new NotFoundException('Avaliação não encontrada');
-    if (!review.artistId.equals(currentArtistId)) {
+  async removerResposta(id: string, artistaAtualId: string) {
+    const aval = await this.avaliacaoModel.findById(id);
+    if (!aval) throw new NotFoundException('Avaliação não encontrada');
+    if (!aval.artistaId.equals(artistaAtualId)) {
       throw new ForbiddenException(
         'Só o artista avaliado pode remover esta resposta',
       );
     }
-    review.artistReply = undefined;
-    await review.save();
-    return review.populate('userId', 'name');
+    const respondidaEm = aval.respostaArtista?.respondidaEm;
+    if (
+      respondidaEm &&
+      Date.now() - new Date(respondidaEm).getTime() > JANELA_EDICAO_MS
+    ) {
+      throw new ForbiddenException(
+        'Janela de exclusão da resposta expirou (15 minutos após responder)',
+      );
+    }
+    aval.respostaArtista = undefined;
+    await aval.save();
+    return aval.populate('usuarioId', 'nome');
   }
 }
