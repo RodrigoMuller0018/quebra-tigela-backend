@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Usuario, UsuarioDocument } from '../users/schemas/user.schema';
 import { Artista, ArtistaDocument } from '../artists/schemas/artist.schema';
 import { gerarHandleUnico, validarFormatoHandle } from '../common/handle';
@@ -193,6 +193,29 @@ export class AuthService {
     return this.assinarToken({
       sub: usuario._id.toString(),
       papel: (usuario.papel === 'admin' ? 'admin' : 'cliente') as 'cliente' | 'admin',
+      email: usuario.email,
+      temPerfilArtista: !!artista,
+      artistaId: artista ? artista._id.toString() : undefined,
+    });
+  }
+
+  /**
+   * Re-emite um JWT pra um usuário já autenticado, refletindo o estado atual
+   * (papel, perfil de artista, artistaId). Usado quando o usuário muda de
+   * estado durante a sessão — ex: virou artista e precisa do JWT atualizado
+   * sem ter que deslogar/relogar.
+   */
+  async reemitirTokenParaUsuario(usuarioId: string) {
+    const usuario = await this.usuarioModel.findById(usuarioId).lean();
+    if (!usuario) throw new UnauthorizedException('Usuário não encontrado');
+    const artista = await this.artistaModel
+      .findOne({ usuarioId: new Types.ObjectId(usuarioId) })
+      .lean();
+    return this.assinarToken({
+      sub: usuarioId,
+      papel: (usuario.papel === 'admin' ? 'admin' : 'cliente') as
+        | 'cliente'
+        | 'admin',
       email: usuario.email,
       temPerfilArtista: !!artista,
       artistaId: artista ? artista._id.toString() : undefined,

@@ -15,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ArtistsService } from './artists.service';
+import { AuthService } from '../auth/auth.service';
 import { TornarSeArtistaDto } from './dto/become-artist.dto';
 import { AtualizarArtistaDto } from './dto/update-artist.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -30,6 +31,7 @@ import { Artista, ArtistaDocument } from './schemas/artist.schema';
 export class ArtistsController {
   constructor(
     private readonly service: ArtistsService,
+    private readonly authService: AuthService,
     @InjectModel(Artista.name) private artistaModel: Model<ArtistaDocument>,
   ) {}
 
@@ -94,11 +96,22 @@ export class ArtistsController {
     return artista;
   }
 
-  /** Usuário logado cria seu perfil de artista (composition: Usuario + Artista). */
+  /**
+   * Usuário logado cria seu perfil de artista (composition: Usuario + Artista).
+   * Retorna também um JWT novo já com `temPerfilArtista=true` + `artistaId`,
+   * pra UI atualizar na hora sem precisar deslogar/relogar.
+   */
   @UseGuards(JwtAuthGuard)
   @Post('tornar-se-artista')
-  tornarSeArtista(@Body() dto: TornarSeArtistaDto, @UsuarioAtual() user: UsuarioJwt) {
-    return this.service.tornarSeArtista(user.sub, dto);
+  async tornarSeArtista(
+    @Body() dto: TornarSeArtistaDto,
+    @UsuarioAtual() user: UsuarioJwt,
+  ) {
+    const artista = await this.service.tornarSeArtista(user.sub, dto);
+    const { access_token } = await this.authService.reemitirTokenParaUsuario(
+      user.sub,
+    );
+    return { artista, access_token };
   }
 
   @Get(':id/perfil')

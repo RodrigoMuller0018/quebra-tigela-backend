@@ -7,6 +7,7 @@ import { Usuario, UsuarioSchema } from '../users/schemas/user.schema';
 import { Servico, ServicoSchema } from '../services/schemas/service.schema';
 import { ItemAgenda, ItemAgendaSchema } from '../schedule/schemas/schedule.schema';
 import { Avaliacao, AvaliacaoSchema } from '../reviews/schemas/review.schema';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { Avaliacao, AvaliacaoSchema } from '../reviews/schemas/review.schema';
       { name: ItemAgenda.name, schema: ItemAgendaSchema },
       { name: Avaliacao.name, schema: AvaliacaoSchema },
     ]),
+    AuthModule,
   ],
   controllers: [ArtistsController],
   providers: [ArtistsService],
