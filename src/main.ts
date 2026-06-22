@@ -11,8 +11,14 @@ async function bootstrap() {
   app.use(json({ limit: '1mb' }));
   app.use(urlencoded({ extended: true, limit: '1mb' }));
 
+  // CORS — em dev (sem FRONTEND_URLS setado) libera tudo pra facilitar o
+  // localhost; em prod restringe à lista vinda da env var
+  // (ex: "https://meu-app.vercel.app,https://meu-app-git-main.vercel.app").
+  const origensPermitidas = process.env.FRONTEND_URLS
+    ? process.env.FRONTEND_URLS.split(',').map((u) => u.trim())
+    : true;
   app.enableCors({
-    origin: true,
+    origin: origensPermitidas,
     credentials: true,
   });
 
